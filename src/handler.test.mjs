@@ -30,6 +30,13 @@ test('GET /openings filters by company, case-insensitively', async () => {
   assert.ok(items.every((o) => o.company === 'Acme Analytics'))
 })
 
+test('GET / serves the web page', async () => {
+  const res = await call('GET /')
+  assert.equal(res.statusCode, 200)
+  assert.match(res.headers['content-type'], /^text\/html/)
+  assert.match(res.body, /IIM Placement Openings/)
+})
+
 test('unknown routes return 404', async () => {
   const res = await call('GET /nope')
   assert.equal(res.statusCode, 404)

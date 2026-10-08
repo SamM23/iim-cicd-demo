@@ -1,4 +1,8 @@
 // Synthetic data only; no real placement records.
+import { readFileSync } from 'node:fs'
+
+const PAGE = readFileSync(new URL('./index.html', import.meta.url), 'utf8')
+
 const OPENINGS = [
   { id: 'op-001', company: 'Acme Analytics', role: 'Data Analyst', ctc: '9 LPA' },
   { id: 'op-002', company: 'Acme Analytics', role: 'Product Manager', ctc: '16 LPA' },
@@ -21,6 +25,12 @@ const json = (statusCode, body) => ({
 // API Gateway HTTP API, payload format 2.0.
 export const handler = async (event) => {
   switch (event.routeKey) {
+    case 'GET /':
+      return {
+        statusCode: 200,
+        headers: { 'content-type': 'text/html; charset=utf-8', 'x-content-type-options': 'nosniff' },
+        body: PAGE,
+      }
     case 'GET /health':
       // APP_VERSION is the git SHA injected by the pipeline; the smoke test checks it.
       return json(200, { status: 'ok', version: process.env.APP_VERSION ?? 'dev' })

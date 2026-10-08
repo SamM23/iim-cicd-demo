@@ -58,8 +58,8 @@ run "exposes_expected_routes" {
   command = plan
 
   assert {
-    condition     = length(aws_apigatewayv2_route.routes) == 2
-    error_message = "Expected GET /health and GET /openings."
+    condition     = length(aws_apigatewayv2_route.routes) == 3
+    error_message = "Expected GET /, GET /health and GET /openings."
   }
 }
 

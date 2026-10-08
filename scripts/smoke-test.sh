@@ -24,6 +24,10 @@ count="$(curl -fsS --max-time 5 "${base}/openings" | jq '.items | length')"
 [ "${count}" -gt 0 ] || { echo "::error::/openings returned no items"; exit 1; }
 echo "ok: /openings returned ${count} items"
 
+ctype="$(curl -s -o /dev/null -w '%{content_type}' --max-time 5 "${base}/")"
+case "${ctype}" in text/html*) ;; *) echo "::error::/ returned content-type '${ctype}', expected text/html"; exit 1 ;; esac
+echo "ok: / serves the web page"
+
 code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "${base}/does-not-exist")"
 [ "${code}" = "404" ] || { echo "::error::unknown route returned ${code}, expected 404"; exit 1; }
 echo "ok: unknown route returns 404"
