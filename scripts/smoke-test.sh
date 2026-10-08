@@ -28,6 +28,10 @@ ctype="$(curl -s -o /dev/null -w '%{content_type}' --max-time 5 "${base}/")"
 case "${ctype}" in text/html*) ;; *) echo "::error::/ returned content-type '${ctype}', expected text/html"; exit 1 ;; esac
 echo "ok: / serves the web page"
 
+jstype="$(curl -s -o /dev/null -w '%{content_type}' --max-time 5 "${base}/app.js")"
+case "${jstype}" in text/javascript*) ;; *) echo "::error::/app.js returned content-type '${jstype}', expected text/javascript"; exit 1 ;; esac
+echo "ok: /app.js is served"
+
 code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "${base}/does-not-exist")"
 [ "${code}" = "404" ] || { echo "::error::unknown route returned ${code}, expected 404"; exit 1; }
 echo "ok: unknown route returns 404"
