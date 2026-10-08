@@ -30,11 +30,19 @@ test('GET /openings filters by company, case-insensitively', async () => {
   assert.ok(items.every((o) => o.company === 'Acme Analytics'))
 })
 
-test('GET / serves the web page', async () => {
+test('GET / serves the Placement Board page', async () => {
   const res = await call('GET /')
   assert.equal(res.statusCode, 200)
   assert.match(res.headers['content-type'], /^text\/html/)
-  assert.match(res.body, /IIM Placement Openings/)
+  assert.match(res.body, /Placement Cell/)
+})
+
+test('the page assets are served with the right content types', async () => {
+  const js = await call('GET /app.js')
+  const css = await call('GET /styles.css')
+  assert.match(js.headers['content-type'], /^text\/javascript/)
+  assert.match(css.headers['content-type'], /^text\/css/)
+  assert.ok(js.body.length > 1000 && css.body.length > 1000)
 })
 
 test('unknown routes return 404', async () => {
