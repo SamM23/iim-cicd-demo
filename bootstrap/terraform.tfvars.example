@@ -1,2 +1,3 @@
+# Names only, not URLs. Copy the exact capitalisation shown on GitHub.
 github_owner = "your-github-username"
-github_repo  = "your-fork-name"
+github_repo  = "iim-cicd-demo"
