@@ -1,0 +1,12 @@
+.terraform/
+*.tfstate
+*.tfstate.*
+tfplan
+plan.txt
+terraform/build/
+local_override.tf
+terraform.tfvars
+*.auto.tfvars
+node_modules/
+.env
+.aws/

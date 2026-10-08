@@ -1,0 +1,112 @@
+name: Deploy
+
+# Merge to main: checks -> plan -> manual approval (prod environment) -> apply the reviewed plan -> smoke test.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One deploy at a time; never cancel one that is mid-apply.
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  checks:
+    uses: ./.github/workflows/checks.yml
+
+  plan:
+    name: Plan
+    needs: checks
+    if: ${{ vars.AWS_PLAN_ROLE_ARN != '' && vars.AWS_DEPLOY_ROLE_ARN != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - uses: ./.github/actions/terraform-init
+        with:
+          state-bucket: ${{ vars.TF_STATE_BUCKET }}
+          lock-table: ${{ vars.TF_LOCK_TABLE }}
+          region: ${{ vars.AWS_REGION }}
+          state-key: ${{ github.event.repository.name }}/prod/terraform.tfstate
+
+      - name: Plan
+        working-directory: terraform
+        run: |
+          terraform plan -input=false -no-color \
+            -var-file=env/prod.tfvars \
+            -var="release_version=${GITHUB_SHA}" \
+            -out=tfplan
+          terraform show -no-color tfplan > plan.txt
+          {
+            echo '### Terraform plan awaiting approval'
+            echo '```'
+            head -c 60000 plan.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # The exact plan the reviewer read is what gets applied. build/ holds the Lambda zip the plan points at.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tfplan
+          path: |
+            terraform/tfplan
+            terraform/build/lambda.zip
+          retention-days: 1
+          if-no-files-found: error
+
+  apply:
+    name: Apply and smoke test
+    needs: plan
+    runs-on: ubuntu-latest
+    # Required reviewers on this environment are the manual approval gate.
+    environment:
+      name: prod
+      url: ${{ steps.out.outputs.api_url }}
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: tfplan
+          path: terraform
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - uses: ./.github/actions/terraform-init
+        with:
+          state-bucket: ${{ vars.TF_STATE_BUCKET }}
+          lock-table: ${{ vars.TF_LOCK_TABLE }}
+          region: ${{ vars.AWS_REGION }}
+          state-key: ${{ github.event.repository.name }}/prod/terraform.tfstate
+
+      - name: Apply reviewed plan
+        working-directory: terraform
+        run: terraform apply -input=false tfplan
+
+      - name: Read API URL
+        id: out
+        working-directory: terraform
+        run: echo "api_url=$(terraform output -raw api_endpoint)" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke test
+        env:
+          API_URL: ${{ steps.out.outputs.api_url }}
+        run: bash scripts/smoke-test.sh "$API_URL" "$GITHUB_SHA"

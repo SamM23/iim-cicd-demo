@@ -1,0 +1,71 @@
+name: Checks
+
+# Reusable. Needs no AWS credentials, so it is safe to run on any pull request.
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  app:
+    name: App lint and unit tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm run lint
+      - run: npm test
+
+  terraform:
+    name: Terraform format, validate, test, lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+          terraform_wrapper: false
+
+      - name: Format
+        run: terraform fmt -check -recursive -diff
+
+      - name: Validate and test app root
+        working-directory: terraform
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate
+          terraform test
+
+      - name: Validate bootstrap
+        working-directory: bootstrap
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate
+
+      - uses: terraform-linters/setup-tflint@v4
+
+      - name: tflint
+        working-directory: terraform
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          tflint --init
+          tflint --format compact
+
+  secrets:
+    name: Block committed AWS keys
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          if git grep -nE 'AKIA[0-9A-Z]{16}'; then
+            echo "::error::Possible AWS access key committed. Delete the key in IAM and remove it from history."
+            exit 1
+          fi

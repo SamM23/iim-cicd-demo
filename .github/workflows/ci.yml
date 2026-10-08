@@ -1,0 +1,77 @@
+name: CI
+
+# Pull requests: run checks, then show the prod plan. Never applies.
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    uses: ./.github/workflows/checks.yml
+
+  plan:
+    name: Terraform plan (prod, not applied)
+    needs: checks
+    # Skipped until the bootstrap outputs are saved as repository variables.
+    if: ${{ vars.AWS_PLAN_ROLE_ARN != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - uses: ./.github/actions/terraform-init
+        with:
+          state-bucket: ${{ vars.TF_STATE_BUCKET }}
+          lock-table: ${{ vars.TF_LOCK_TABLE }}
+          region: ${{ vars.AWS_REGION }}
+          state-key: ${{ github.event.repository.name }}/prod/terraform.tfstate
+
+      - name: Plan
+        working-directory: terraform
+        run: |
+          terraform plan -input=false -no-color \
+            -var-file=env/prod.tfvars \
+            -var="release_version=${GITHUB_SHA}" \
+            -out=tfplan
+          terraform show -no-color tfplan > plan.txt
+          {
+            echo '### Terraform plan (prod, not applied)'
+            echo '```'
+            head -c 60000 plan.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Comment plan on the pull request
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- terraform-plan -->';
+            const plan = fs.readFileSync('terraform/plan.txt', 'utf8').slice(0, 60000);
+            const body = `${marker}\n### Terraform plan (prod, not applied)\n\`\`\`\n${plan}\n\`\`\``;
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number });
+            const existing = comments.find((c) => c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }

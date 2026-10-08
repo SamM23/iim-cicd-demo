@@ -1,0 +1,11 @@
+{
+  "name": "iim-cicd-demo",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Placement openings API used to demonstrate automated testing, CI/CD and deployment.",
+  "scripts": {
+    "lint": "node --check handler.mjs && node --check handler.test.mjs",
+    "test": "node --test"
+  }
+}

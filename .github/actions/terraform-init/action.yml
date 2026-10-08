@@ -1,0 +1,40 @@
+name: Terraform init (S3 backend)
+description: Install Terraform and initialise the remote state backend in terraform/.
+
+inputs:
+  state-bucket:
+    description: S3 bucket that holds Terraform state.
+    required: true
+  lock-table:
+    description: DynamoDB table used for state locking.
+    required: true
+  region:
+    description: Region of the state bucket and lock table.
+    required: true
+  state-key:
+    description: Object key for this app's state file.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: 1.9.8
+        terraform_wrapper: false
+
+    - name: terraform init
+      shell: bash
+      working-directory: terraform
+      env:
+        STATE_BUCKET: ${{ inputs.state-bucket }}
+        LOCK_TABLE: ${{ inputs.lock-table }}
+        STATE_REGION: ${{ inputs.region }}
+        STATE_KEY: ${{ inputs.state-key }}
+      run: |
+        terraform init -input=false \
+          -backend-config="bucket=${STATE_BUCKET}" \
+          -backend-config="key=${STATE_KEY}" \
+          -backend-config="region=${STATE_REGION}" \
+          -backend-config="dynamodb_table=${LOCK_TABLE}" \
+          -backend-config="encrypt=true"
