@@ -1,12 +1,27 @@
 data "aws_caller_identity" "current" {}
 
+# GitHub puts immutable owner/repo IDs in the OIDC subject; read them from the public API (repo must be public).
+data "http" "repo" {
+  url             = "https://api.github.com/repos/${var.github_owner}/${var.github_repo}"
+  request_headers = { Accept = "application/vnd.github+json" }
+
+  lifecycle {
+    postcondition {
+      condition     = self.status_code == 200
+      error_message = "Could not read ${var.github_owner}/${var.github_repo} from GitHub. Create the repo first and keep it public."
+    }
+  }
+}
+
 locals {
+  repo_info    = jsondecode(data.http.repo.response_body)
   account_id   = data.aws_caller_identity.current.account_id
   state_bucket = "iim-tfstate-${local.account_id}"
   lock_table   = "iim-tf-locks"
   state_key    = "${var.github_repo}/prod/terraform.tfstate"
   prefix       = "${var.app_name}-prod"
   repo_sub     = "repo:${var.github_owner}/${var.github_repo}"
+  repo_sub_id  = "repo:${var.github_owner}@${local.repo_info.owner.id}/${var.github_repo}@${local.repo_info.id}"
   oidc_arn     = var.create_oidc_provider ? aws_iam_openid_connect_provider.github[0].arn : data.aws_iam_openid_connect_provider.github[0].arn
 
   tags = {
@@ -93,6 +108,8 @@ resource "aws_iam_role" "plan" {
         StringEquals = {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
           "token.actions.githubusercontent.com:sub" = [
+            "${local.repo_sub_id}:pull_request",
+            "${local.repo_sub_id}:ref:refs/heads/main",
             "${local.repo_sub}:pull_request",
             "${local.repo_sub}:ref:refs/heads/main",
           ]
@@ -115,7 +132,10 @@ resource "aws_iam_role" "deploy" {
       Condition = {
         StringEquals = {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-          "token.actions.githubusercontent.com:sub" = "${local.repo_sub}:environment:prod"
+          "token.actions.githubusercontent.com:sub" = [
+            "${local.repo_sub_id}:environment:prod",
+            "${local.repo_sub}:environment:prod",
+          ]
         }
       }
     }]

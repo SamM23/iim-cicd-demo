@@ -91,6 +91,7 @@ cd terraform; terraform init -backend=false; terraform validate; terraform test;
 ## Security design
 
 - No long-lived AWS keys anywhere. GitHub assumes roles through OIDC.
+- GitHub puts immutable owner and repo IDs in the OIDC subject (`repo:Owner@123/repo@456:...`). The bootstrap reads them from the public GitHub API, so the repo must exist and be public before you apply it. If a role assumption fails with `Not authorized to perform sts:AssumeRoleWithWebIdentity`, look at the failed event in CloudTrail to see the exact subject GitHub sent.
 - **Plan role** trusts only this repo's pull requests and `main`. It can read the app's resources and the state, and cannot create or change anything.
 - **Deploy role** trusts only jobs that use the `prod` environment, so it is only reachable after approval. It is limited to resources prefixed with `app_name-prod`, and `iam:PassRole` only to Lambda.
 - API Gateway cannot be scoped by name before an API exists, so its permissions are scoped by region and path only.
