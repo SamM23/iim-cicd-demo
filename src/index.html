@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IIM Placement Openings</title>
+  <style>
+    :root { --ink: #1b2a41; --accent: #0b6e4f; --line: #d9dee5; --bg: #f5f7fa; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 16px/1.5 system-ui, sans-serif; color: var(--ink); background: var(--bg); }
+    header { background: var(--ink); color: #fff; padding: 20px 24px; }
+    header h1 { margin: 0; font-size: 1.4rem; }
+    header p { margin: 4px 0 0; opacity: .8; font-size: .9rem; }
+    main { max-width: 860px; margin: 24px auto; padding: 0 16px; }
+    .bar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+    label { font-weight: 600; }
+    select { padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; font: inherit; background: #fff; }
+    table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+    th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+    th { background: #eef2f6; font-size: .85rem; text-transform: uppercase; letter-spacing: .04em; }
+    tr:last-child td { border-bottom: 0; }
+    .ctc { color: var(--accent); font-weight: 600; }
+    .meta { margin-top: 16px; font-size: .85rem; color: #55637a; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #e3f4ec; color: var(--accent); font-family: ui-monospace, monospace; font-size: .8rem; }
+    .error { color: #a4161a; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>IIM Placement Openings</h1>
+    <p>Served by AWS Lambda + API Gateway, deployed by GitHub Actions. Synthetic data only.</p>
+  </header>
+  <main>
+    <div class="bar">
+      <label for="company">Company</label>
+      <select id="company"><option value="">All companies</option></select>
+    </div>
+    <table>
+      <thead><tr><th>Company</th><th>Role</th><th>Package</th></tr></thead>
+      <tbody id="rows"><tr><td colspan="3">Loading...</td></tr></tbody>
+    </table>
+    <p class="meta">Deployed version <span class="badge" id="version">...</span></p>
+  </main>
+  <script>
+    const rows = document.getElementById('rows')
+    const select = document.getElementById('company')
+
+    const cell = (text, cls) => {
+      const td = document.createElement('td')
+      td.textContent = text
+      if (cls) td.className = cls
+      return td
+    }
+
+    async function load(company) {
+      const url = company ? '/openings?company=' + encodeURIComponent(company) : '/openings'
+      try {
+        const res = await fetch(url)
+        if (!res.ok) throw new Error('HTTP ' + res.status)
+        const { items } = await res.json()
+        rows.replaceChildren(...items.map((o) => {
+          const tr = document.createElement('tr')
+          tr.append(cell(o.company), cell(o.role), cell(o.ctc, 'ctc'))
+          return tr
+        }))
+        return items
+      } catch (err) {
+        const tr = document.createElement('tr')
+        tr.append(cell('Could not load openings: ' + err.message, 'error'))
+        tr.firstChild.colSpan = 3
+        rows.replaceChildren(tr)
+        return []
+      }
+    }
+
+    async function init() {
+      const items = await load('')
+      for (const name of [...new Set(items.map((o) => o.company))]) {
+        const opt = document.createElement('option')
+        opt.value = opt.textContent = name
+        select.append(opt)
+      }
+      select.addEventListener('change', () => load(select.value))
+      try {
+        const health = await (await fetch('/health')).json()
+        document.getElementById('version').textContent = health.version.slice(0, 7)
+      } catch {
+        document.getElementById('version').textContent = 'unknown'
+      }
+    }
+    init()
+  </script>
+</body>
+</html>

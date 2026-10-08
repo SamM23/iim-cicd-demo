@@ -10,7 +10,7 @@ locals {
     ManagedBy   = "Terraform"
   }
 
-  routes = toset(["GET /health", "GET /openings"])
+  routes = toset(["GET /", "GET /health", "GET /openings"])
 }
 
 # Deploying a new version = new zip hash = Lambda code update. No separate build step.
