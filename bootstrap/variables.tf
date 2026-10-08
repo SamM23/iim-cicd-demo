@@ -10,7 +10,7 @@ variable "github_owner" {
 
   validation {
     condition     = can(regex("^[A-Za-z0-9-]+$", var.github_owner))
-    error_message = "github_owner may contain only letters, digits and hyphens."
+    error_message = "github_owner must be only your GitHub username, for example SamM23: no URL, no slashes, no spaces. Copy the exact capitalisation from GitHub."
   }
 }
 
@@ -20,7 +20,7 @@ variable "github_repo" {
 
   validation {
     condition     = can(regex("^[A-Za-z0-9._-]+$", var.github_repo))
-    error_message = "github_repo may contain only letters, digits, dots, underscores and hyphens."
+    error_message = "github_repo must be only the repository name, for example iim-cicd-demo: not a URL and no slashes. Copy the exact capitalisation from GitHub."
   }
 }
 
